@@ -1,4 +1,5 @@
 import json
+import time
 import torch
 from data_loader_beta import MVTecDRAEMTrainDataset, MVTecDRAEMTestDataset
 from torch.utils.data import DataLoader
@@ -57,6 +58,17 @@ def train_on_device(obj_names, args):
         #                               {"params": model_seg.parameters(), "lr": args.lr}])
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer,[args.epochs*0.7,args.epochs*0.9],gamma=0.2, last_epoch=-1)
 
+        # 从上次的暂停的模型中训练
+        pause_point = os.path.join(checkpoint_path_obj, "pause_point.pckl")
+        if os.path.exists(pause_point):
+            state = torch.load(pause_point)
+            start_epoch = state["epoch"]
+            model.load_state_dict(state["model"])
+            model_seg.load_state_dict(state["model_seg"])
+            optimizer.load_state_dict(state["optimizer"])
+            scheduler.load_state_dict(state["scheduler"])
+        else:
+            start_epoch = 0
         loss_l2 = torch.nn.modules.loss.MSELoss()
         loss_ssim = SSIM()
         loss_focal = FocalLoss()
@@ -68,7 +80,7 @@ def train_on_device(obj_names, args):
 
         val_dataset = MVTecDRAEMTestDataset(args.data_path + obj_name + "/test/", resize_shape=[256, 256])
         val_dataloader = DataLoader(val_dataset, batch_size=1,
-                                shuffle=False, num_workers=0, pin_memory=True)
+                                shuffle=False, num_workers=2, pin_memory=True)
         n_iter = 0
         best_score = 0
         best_auroc = 0
@@ -81,7 +93,7 @@ def train_on_device(obj_names, args):
         display_gt_images = torch.zeros((16 ,3 ,256 ,256)).cuda()
         display_out_masks = torch.zeros((16 ,1 ,256 ,256)).cuda()
         display_in_masks = torch.zeros((16 ,1 ,256 ,256)).cuda()
-        for epoch in range(args.epochs): 
+        for epoch in range(1+start_epoch, 1+args.epochs): 
             print("Epoch: "+str(epoch))
             model.train()
             model_seg.train()
@@ -132,7 +144,7 @@ def train_on_device(obj_names, args):
             scheduler.step()
             cur_lr = optimizer.param_groups[-1]['lr']
             visualizer.plot_loss(cur_lr, epoch, loss_name='lr')
-            if (epoch+1) % 50 == 0:         
+            if epoch % 50 == 0:         
                 visualizer.visualize_image_batch(display_anomaly_images, epoch, image_name='train/in_images')
                 visualizer.visualize_image_batch(display_gt_images, epoch, image_name='train/gt_images')
                 visualizer.visualize_image_batch(display_images, epoch, image_name='train/out_images')
@@ -141,7 +153,7 @@ def train_on_device(obj_names, args):
 
             eval_metrics = test_on_device(model, model_seg, val_dataloader, visualizer, epoch)
             end = time.time()
-            print("the epoch cost time: ",end-start)
+            print("the epoch cost time: ",end-start, "s")
             eval_log = dict([(f'eval_{k}', v) for k, v in eval_metrics.items()])
             eval_log.update({"best_epoch": epoch})
             # total_score = np.mean(list(eval_metrics.values()))
@@ -167,9 +179,19 @@ def train_on_device(obj_names, args):
                     json.dump(eval_log, f, indent="\t")
                 print(f"best_AUROC-pixel_score, {best_auroc_pixel:.5f} to {eval_metrics['AUROC-pixel']:.5f}")
                 best_auroc_pixel = eval_metrics["AUROC-pixel"]
-            if (epoch+1) % 200 == 0:
+            if epoch % 200 == 0:
                 torch.save(model.state_dict(), os.path.join(checkpoint_path_obj, "epoch_"+str(epoch)+"_model_rec.pckl"))
                 torch.save(model_seg.state_dict(), os.path.join(checkpoint_path_obj, "epoch_"+str(epoch)+"_model_seg.pckl"))
+            if epoch == args.pause_epoch:
+                state = {
+                    "epoch": epoch,
+                    "model": model.state_dict(),
+                    "model_seg": model_seg.state_dict(),
+                    "scheduler": scheduler.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                }
+                torch.save(state, pause_point)
+                break
 
 def test_on_device(model, model_seg, val_dataloader, visualizer, epoch, img_dim=256):
     print("============test==============")
@@ -226,7 +248,7 @@ def test_on_device(model, model_seg, val_dataloader, visualizer, epoch, img_dim=
                 display_out_masks[cnt_display] = t_mask[0]
                 display_in_masks[cnt_display] = true_mask[0]
                 cnt_display += 1
-        if (epoch+1) % 50 == 0:         
+        if epoch % 50 == 0:         
             visualizer.visualize_image_batch(display_gt_images, epoch, image_name='test/in_images')
             visualizer.visualize_image_batch(display_images, epoch, image_name='test/out_images')
             visualizer.visualize_image_batch(display_out_masks, epoch, image_name='test/out_masks')
@@ -273,6 +295,7 @@ if __name__=="__main__":
     parser.add_argument('--checkpoint_path', action='store', type=str, required=True)
     parser.add_argument('--log_path', action='store', type=str, required=True)
     parser.add_argument('--visualize', action='store_true')
+    parser.add_argument('--pause_epoch',  action='store', type=int, default=0, required=False)
 
     args = parser.parse_args()
 

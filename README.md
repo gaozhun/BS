@@ -34,7 +34,7 @@ python train_DRAEM.py --gpu_id 0 --obj_id -1 --lr 0.0001 --bs 8 --epochs 700 --d
 ```
 python train_DRAEM.py --gpu_id 0 --obj_id -1 --lr 0.0001 --bs 4 --epochs 800 --data_path /root/autodl-tmp/mvtec/ --anomaly_source_path /root/autodl-tmp/dtd/images/ --checkpoint_path ./checkpoints/SERES-UNet_down_depth5_MobileNetv3Seg/ --log_path ./logs/SERES-UNet_down_depth5_MobileNetv3Seg/ --visualize
 
-python train_DRAEM.py --gpu_id 0 --obj_id -1 --lr 0.0001 --bs 4 --epochs 800 --data_path /root/autodl-tmp/mvtec/ --anomaly_source_path /root/autodl-tmp/dtd/images/ --checkpoint_path ./checkpoints/SERESNET_MOBV3_CBAM_RESUP_AdamW/ --log_path ./logs/SERESNET_MOBV3_CBAM_RESUP_AdamW/ --visualize
+python train_DRAEM.py --gpu_id 0 --obj_id -1 --lr 0.0001 --bs 4 --epochs 800 --data_path /root/autodl-tmp/mvtec/ --anomaly_source_path /root/autodl-tmp/dtd/images/ --checkpoint_path ./checkpoints/SERESNET_MOBV3_CBAM_RESUP_AdamW/ --log_path ./logs/SERESNET_MOBV3_CBAM_RESUP_AdamW/ --visualize --pause_epoch 10
 
 The conda environement used in the project is decsribed in **requirements.txt**.
 
