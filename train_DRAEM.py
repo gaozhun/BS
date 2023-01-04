@@ -86,6 +86,7 @@ def train_on_device(obj_names, args):
             model.train()
             model_seg.train()
             cnt_display = 0
+            start = time.time()
             with tqdm(dataloader, desc=obj_name+'_'+obj_transform_dict[obj_name], file=sys.stdout) as iterator:
                 for i_batch, sample_batched in enumerate(iterator):
                     gray_batch = sample_batched["image"].cuda()
@@ -115,13 +116,7 @@ def train_on_device(obj_names, args):
                         visualizer.plot_loss(l2_loss, n_iter, loss_name='l2_loss')
                         visualizer.plot_loss(ssim_loss, n_iter, loss_name='ssim_loss')
                         visualizer.plot_loss(segment_loss, n_iter, loss_name='segment_loss')
-                    # if args.visualize and n_iter % 400 == 0:
-                    #     t_mask = out_mask_sm[:, 1:, :, :]
-                    #     visualizer.visualize_image_batch(aug_gray_batch, n_iter, image_name='batch_augmented')
-                    #     visualizer.visualize_image_batch(gray_batch, n_iter, image_name='batch_recon_target')
-                    #     visualizer.visualize_image_batch(gray_rec, n_iter, image_name='batch_recon_out')
-                    #     visualizer.visualize_image_batch(anomaly_mask, n_iter, image_name='mask_target')
-                    #     visualizer.visualize_image_batch(t_mask, n_iter, image_name='mask_out')
+
                     if i_batch in display_indices:
                         t_mask = out_mask_sm[:, 1:, :, :]
                         display_anomaly_images[cnt_display] = aug_gray_batch[0]
@@ -135,6 +130,8 @@ def train_on_device(obj_names, args):
                     del gray_rec
                     del out_mask
             scheduler.step()
+            cur_lr = optimizer.param_groups[-1]['lr']
+            visualizer.plot_loss(cur_lr, epoch, loss_name='lr')
             if (epoch+1) % 50 == 0:         
                 visualizer.visualize_image_batch(display_anomaly_images, epoch, image_name='train/in_images')
                 visualizer.visualize_image_batch(display_gt_images, epoch, image_name='train/gt_images')
@@ -143,6 +140,8 @@ def train_on_device(obj_names, args):
                 visualizer.visualize_image_batch(display_in_masks, epoch, image_name='train/gt_masks')
 
             eval_metrics = test_on_device(model, model_seg, val_dataloader, visualizer, epoch)
+            end = time.time()
+            print("the epoch cost time: ",end-start)
             eval_log = dict([(f'eval_{k}', v) for k, v in eval_metrics.items()])
             eval_log.update({"best_epoch": epoch})
             # total_score = np.mean(list(eval_metrics.values()))
