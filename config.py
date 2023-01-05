@@ -22,7 +22,7 @@ transform_dict = {
 }
 
 # 对比实验
-same_transform = "RandomRotate90_Flip"
+same_transform = "None"
 obj_transform_dict = {
         'capsule': same_transform,
         'bottle': same_transform,

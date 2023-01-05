@@ -35,7 +35,11 @@ def train_on_device(obj_names, args):
         os.makedirs(args.log_path)
 
     for obj_name in obj_names:
-        run_name = 'DRAEM_test_'+str(args.lr)+'_'+str(args.epochs)+'_bs'+str(args.bs)+"_"+obj_name+'_'+obj_transform_dict[obj_name]
+        if args.transform_type:
+            transform_type = args.transform_type
+        else:
+            transform_type = obj_transform_dict[obj_name]
+        run_name = 'DRAEM_test_'+str(args.lr)+'_'+str(args.epochs)+'_bs'+str(args.bs)+"_"+obj_name+'_'+transform_type
         print(run_name)
         checkpoint_path_obj = os.path.join(args.checkpoint_path, run_name)
         if not os.path.exists(checkpoint_path_obj):
@@ -67,13 +71,19 @@ def train_on_device(obj_names, args):
             model_seg.load_state_dict(state["model_seg"])
             optimizer.load_state_dict(state["optimizer"])
             scheduler.load_state_dict(state["scheduler"])
+            best_score = state["best_score"]
+            best_auroc = state["best_auroc"]
+            best_auroc_pixel = state["best_auroc_pixel"]
         else:
             start_epoch = 0
+            best_score = 0
+            best_auroc = 0
+            best_auroc_pixel = 0
         loss_l2 = torch.nn.modules.loss.MSELoss()
         loss_ssim = SSIM()
         loss_focal = FocalLoss()
 
-        dataset = MVTecDRAEMTrainDataset(args.data_path + obj_name + "/train/good/", args.anomaly_source_path, obj_transform_dict[obj_name], resize_shape=[256, 256])
+        dataset = MVTecDRAEMTrainDataset(args.data_path + obj_name + "/train/good/", args.anomaly_source_path, transform_type, resize_shape=[256, 256])
 
         dataloader = DataLoader(dataset, batch_size=args.bs,
                                 shuffle=True, num_workers=2, pin_memory=True)
@@ -82,9 +92,9 @@ def train_on_device(obj_names, args):
         val_dataloader = DataLoader(val_dataset, batch_size=1,
                                 shuffle=False, num_workers=2, pin_memory=True)
         n_iter = 0
-        best_score = 0
-        best_auroc = 0
-        best_auroc_pixel = 0
+        # best_score = 0
+        # best_auroc = 0
+        # best_auroc_pixel = 0
         cnt_display = 0
         display_indices = np.random.choice(len(dataloader), 15, replace=False)
 
@@ -99,7 +109,7 @@ def train_on_device(obj_names, args):
             model_seg.train()
             cnt_display = 0
             start = time.time()
-            with tqdm(dataloader, desc=obj_name+'_'+obj_transform_dict[obj_name], file=sys.stdout) as iterator:
+            with tqdm(dataloader, desc=obj_name+'_'+transform_type, file=sys.stdout) as iterator:
                 for i_batch, sample_batched in enumerate(iterator):
                     gray_batch = sample_batched["image"].cuda()
                     aug_gray_batch = sample_batched["augmented_image"].cuda()
@@ -189,6 +199,9 @@ def train_on_device(obj_names, args):
                     "model_seg": model_seg.state_dict(),
                     "scheduler": scheduler.state_dict(),
                     "optimizer": optimizer.state_dict(),
+                    "best_score" : best_score,
+                    "best_auroc" : best_auroc,
+                    "best_auroc_pixel" : best_auroc_pixel,
                 }
                 torch.save(state, pause_point)
                 break
@@ -296,6 +309,7 @@ if __name__=="__main__":
     parser.add_argument('--log_path', action='store', type=str, required=True)
     parser.add_argument('--visualize', action='store_true')
     parser.add_argument('--pause_epoch',  action='store', type=int, default=0, required=False)
+    parser.add_argument('--transform_type',  action='store', type=str, required=False)
 
     args = parser.parse_args()
 
@@ -317,22 +331,41 @@ if __name__=="__main__":
                  ]
 
     if int(args.obj_id) == -1:
+        # obj_list = [
+        #             'capsule',
+        #              'bottle',
+        #              'carpet',
+        #              'leather',
+        #              'pill',
+        #              'transistor',
+        #              'tile',
+        #              'cable',
+        #              'zipper',
+        #              'toothbrush',
+        #              'metal_nut',
+        #              'hazelnut',
+        #              'screw',
+        #              'grid',
+        #              'wood'
+        #              ]
         obj_list = [
-                    'capsule',
-                     'bottle',
-                     'carpet',
-                     'leather',
-                     'pill',
-                     'transistor',
+                    #  'hazelnut',
+                    #  'bottle',
+                    #  'screw',
+
+                    #  'leather',
+                     'wood',
                      'tile',
-                     'cable',
-                     'zipper',
-                     'toothbrush',
-                     'metal_nut',
-                     'hazelnut',
-                     'screw',
+                     'carpet',
                      'grid',
-                     'wood'
+
+                    #  'capsule',
+                    #  'pill',
+                    #  'transistor',
+                    #  'cable',
+                    #  'zipper',
+                    #  'toothbrush',
+                    #  'metal_nut',
                      ]
         picked_classes = obj_list
     else:
